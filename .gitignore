@@ -1,0 +1,31 @@
+# 排除数据集
+data/
+
+# 排除训练结果
+Train_Result/
+
+# 排除评估结果
+Evaluation_Result/
+
+# 排除预测结果
+Predict_Result/
+
+# 排除Python缓存文件
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 排除系统文件
+.DS_Store
+Thumbs.db
+
+# 排除IDE配置文件
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 排除虚拟环境
+venv/
+env/
+ENV/ 
