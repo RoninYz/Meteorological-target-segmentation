@@ -24,26 +24,33 @@
 
 本项目依赖以下主要库：
 
-- Python 3.6+ 
-- PyTorch 1.8+
+- Python 3.8+ 
+- PyTorch 2.0+
 - PyTorch Lightning 2.0+
-- Segmentation Models PyTorch (SMP)
-- Albumentations
-- NumPy
-- Matplotlib
-- pandas
-- tqdm
+- Segmentation Models PyTorch (SMP) 0.3.0+
+- Albumentations 1.3.0+
+- NumPy 1.22.0+
+- Matplotlib 3.5.0+
+- 其他依赖详见requirements.txt文件
 
 ### 安装步骤
 
 1. **创建虚拟环境**（推荐使用 conda）：
 
 ```bash
-conda create -n meteor_seg python=3.8
-conda activate meteor_seg
+conda create -n segmentation python=3.8
+conda activate segmentation
 ```
 
-2. **安装 PyTorch**：
+2. **使用requirements.txt安装所有依赖**：
+
+```bash
+pip install -r requirements.txt
+```
+
+或者，您也可以分步安装关键组件：
+
+3. **安装 PyTorch**：
 
 根据您的 CUDA 版本安装适当版本的 PyTorch，请访问 [PyTorch官网](https://pytorch.org/get-started/locally/) 获取具体命令。例如，对于 CUDA 11.8：
 
@@ -51,10 +58,10 @@ conda activate meteor_seg
 conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
 ```
 
-3. **安装其他依赖**：
+4. **安装其他依赖**：
 
 ```bash
-pip install pytorch-lightning segmentation-models-pytorch albumentations pandas matplotlib tqdm
+pip install pytorch-lightning segmentation-models-pytorch albumentations matplotlib tqdm
 ```
 
 ## 数据格式和处理
