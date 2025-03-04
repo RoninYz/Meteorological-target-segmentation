@@ -72,6 +72,23 @@ pip install pytorch-lightning segmentation-models-pytorch albumentations matplot
 - **标签数据**：npy 格式文件，包含二分类标签（0:背景，1:目标）。
 - **数据列表**：train.txt、val.txt 和 test.txt 包含输入数据和对应标签的文件路径对。
 
+### 数据集分割
+
+项目提供了数据集分割功能，可以将数据集按照指定比例划分为训练集、验证集和测试集。使用以下命令进行数据集分割：
+
+```bash
+python split_dataset.py --data-dir ./data/THI --train-ratio 0.7 --val-ratio 0.15 --test-ratio 0.15
+```
+
+主要参数说明：
+- `--data-dir`：数据集根目录路径
+- `--train-ratio`：训练集比例（默认0.7）
+- `--val-ratio`：验证集比例（默认0.15）
+- `--test-ratio`：测试集比例（默认0.15）
+- `--random-seed`：随机种子，用于复现分割结果（默认42）
+
+分割后将在数据集目录下生成 train.txt、val.txt 和 test.txt 三个文件。
+
 ### 数据结构
 
 数据应组织为以下结构：
