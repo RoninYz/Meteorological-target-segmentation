@@ -256,23 +256,6 @@ python predict.py
 | lr | 学习率 | 1e-4 | 建议范围：1e-5~1e-3 |
 | precision | 训练精度 | 16-mixed | 32, 16-mixed, bf16-mixed |
 
-### 高级训练技巧
-
-1. **学习率调整**
-```bash
-python train.py --lr 1e-4 --lr-scheduler cosine --warmup-epochs 5
-```
-
-2. **使用预训练模型**
-```bash
-python train.py --pretrained --weights "./pretrained/model.pth"
-```
-
-3. **多GPU训练**
-```bash
-python train.py --gpus 2 --strategy ddp
-```
-
 ### 数据增强配置
 
 在 `data_utils/augmentation.py` 中可以自定义数据增强策略：
@@ -293,11 +276,6 @@ python train.py --gpus 2 --strategy ddp
 - 数据预加载
 - 多进程数据加载
 - GPU预热
-
-3. **模型优化**
-- 模型剪枝
-- 知识蒸馏
-- 量化
 
 ## ❓ 常见问题
 
