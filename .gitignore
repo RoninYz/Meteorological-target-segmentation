@@ -13,6 +13,9 @@ Predict_Result/
 # 排除可视化结果
 Visualization_Result/  
 
+# 排除gitignore文件
+.gitignore
+
 # 排除Python缓存文件
 __pycache__/
 *.py[cod]
