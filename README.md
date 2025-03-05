@@ -1,372 +1,330 @@
-# 气象目标分割项目文档
+# 气象目标分割项目
 
-## 项目介绍
+## 📋 目录
+- [项目简介](#-项目简介)
+- [特性](#-特性)
+- [环境配置](#-环境配置)
+- [项目结构](#-项目结构)
+- [快速开始](#-快速开始)
+- [详细指南](#-详细指南)
+- [性能优化](#-性能优化)
+- [常见问题](#-常见问题)
+- [引用](#-引用)
 
-这是一个基于深度学习的气象目标分割项目，旨在对雷达气象数据进行自动化分割，实现对气象目标的精确识别。本项目基于 Segmentation Models PyTorch (SMP) 和 PyTorch Lightning 框架开发，支持多种先进的语义分割模型架构和编码器网络，能够处理多通道气象数据并实现高效训练和预测。
+## 📝 项目简介
 
-### 项目特点
+本项目是一个专业的气象目标分割系统，基于深度学习技术，用于处理和分析气象雷达数据。系统能够自动识别和分割气象目标，为气象分析和预测提供重要支持。
 
-1. **多种分割模型支持**：支持 Unet、UnetPlusPlus、DeepLabV3、DeepLabV3Plus、FPN、PSPNet、PAN、LinkNet、MAnet、UPerNet、Segformer 等多种先进的语义分割模型架构。
+### 🌟 特性
 
-2. **丰富的主干网络**：支持 ResNet、ResNeXt、EfficientNet、MobileNet、DenseNet、SENet、VGG、Inception 等各系列主干网络。
+- **多模型支持**
+  - 支持11种主流分割模型：Unet、UnetPlusPlus、DeepLabV3、DeepLabV3Plus等
+  - 支持30+种编码器网络：ResNet系列、EfficientNet系列等
+  
+- **数据处理**
+  - 支持多通道气象数据（Z1、V1、W1、SNR1、LDR）
+  - 内置专业的数据预处理流程
+  - 强大的数据增强功能
 
-3. **多通道数据处理**：专为气象数据设计，可处理包含 Z1、V1、W1、SNR1、LDR 等多个通道的雷达数据。
+- **训练优化**
+  - 支持混合精度训练（FP16/BF16）
+  - 断点续训功能
+  - 自动学习率调整
+  - 多GPU训练支持
 
-4. **混合精度训练**：支持 16 位和 32 位混合精度训练，提高训练效率。
+- **可视化功能**
+  - 训练过程实时监控
+  - 预测结果可视化
+  - 性能指标图表展示
 
-5. **完整工作流**：包含数据处理、模型训练、验证评估和预测可视化的完整工作流程。
+## 🛠 环境配置
 
-6. **数据增强**：集成了基于 Albumentations 的数据增强策略，提高模型泛化能力。
-
-## 环境安装
-
-### 依赖环境要求
-
-本项目依赖以下主要库：
-
-- Python 3.8+ 
-- PyTorch 2.0+
-- PyTorch Lightning 2.0+
-- Segmentation Models PyTorch (SMP) 0.3.0+
-- Albumentations 1.3.0+
-- NumPy 1.22.0+
-- Matplotlib 3.5.0+
-- 其他依赖详见requirements.txt文件
+### 系统要求
+- Windows 10/11 x64 或 Linux
+- NVIDIA GPU (建议8GB+显存)
+- CUDA 11.7+
+- Python 3.8+
 
 ### 安装步骤
 
-1. **创建虚拟环境**（推荐使用 conda）：
-
+1. **创建并激活虚拟环境**
 ```bash
-conda create -n segmentation python=3.8
-conda activate segmentation
+# 使用conda创建环境
+conda create -n meteo-seg python=3.8
+conda activate meteo-seg
+
+# 或使用venv
+python -m venv meteo-seg
+# Windows激活
+.\\meteo-seg\\Scripts\\activate
+# Linux激活
+source meteo-seg/bin/activate
 ```
 
-2. **使用requirements.txt安装所有依赖**：
+2. **安装PyTorch**
+```bash
+# CUDA 11.8
+conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
 
+# 或使用pip（建议）
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+```
+
+3. **安装项目依赖**
 ```bash
 pip install -r requirements.txt
 ```
 
-或者，您也可以分步安装关键组件：
+## 📁 项目结构
 
-3. **安装 PyTorch**：
-
-根据您的 CUDA 版本安装适当版本的 PyTorch，请访问 [PyTorch官网](https://pytorch.org/get-started/locally/) 获取具体命令。例如，对于 CUDA 11.8：
-
-```bash
-conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
+```
+Meteorological-target-segmentation/
+├── data/                       # 数据目录
+│   └── THI/                   # 气象数据集
+│       ├── Input/             # 输入数据
+│       ├── Label/             # 标签数据
+│       ├── train.txt          # 训练集列表
+│       ├── val.txt            # 验证集列表
+│       └── test.txt           # 测试集列表
+├── models/                     # 模型定义
+├── utils/                     # 工具函数
+├── data_utils/                # 数据处理工具
+├── Train_Result/              # 训练结果保存
+├── Predict_Result/            # 预测结果保存
+├── Visualization_Result/      # 可视化结果
+├── train.py                   # 训练脚本
+├── val.py                     # 验证脚本
+├── predict.py                 # 预测脚本
+└── requirements.txt           # 项目依赖
 ```
 
-4. **安装其他依赖**：
+## 🚀 快速开始
 
-```bash
-pip install pytorch-lightning segmentation-models-pytorch albumentations matplotlib tqdm
-```
+### 1. 数据准备
 
-## 数据格式和处理
-
-### 数据格式
-
-- **输入数据**：npz 格式文件，包含 5 个通道（Z1、V1、W1、SNR1、LDR）的气象雷达数据。
-- **标签数据**：npy 格式文件，包含二分类标签（0:背景，1:目标）。
-- **数据列表**：train.txt、val.txt 和 test.txt 包含输入数据和对应标签的文件路径对。
-
-### 数据集分割
-
-项目提供了数据集分割功能，可以将数据集按照指定比例划分为训练集、验证集和测试集。使用以下命令进行数据集分割：
-
-```bash
-python split_dataset.py --data-dir ./data/THI --train-ratio 0.7 --val-ratio 0.15 --test-ratio 0.15
-```
-
-主要参数说明：
-- `--data-dir`：数据集根目录路径
-- `--train-ratio`：训练集比例（默认0.7）
-- `--val-ratio`：验证集比例（默认0.15）
-- `--test-ratio`：测试集比例（默认0.15）
-- `--random-seed`：随机种子，用于复现分割结果（默认42）
-
-分割后将在数据集目录下生成 train.txt、val.txt 和 test.txt 三个文件。
-
-### 数据结构
-
-数据应组织为以下结构：
+#### 1.1 数据集结构
+项目使用THI（Thunderstorm Hydrometeor Identification）数据集，数据集应按以下结构组织：
 
 ```
 data/
-  ├── THI/
-  │   ├── Input/              # 包含 npz 格式的输入数据
-  │   │   └── *.npz
-  │   ├── Label/              # 包含 npy 格式的标签数据
-  │   │   └── *.npy
-  │   ├── train.txt           # 训练数据列表 
-  │   ├── val.txt             # 验证数据列表
-  │   └── test.txt            # 测试数据列表
+└── THI/
+    ├── Input/                 # 输入数据文件夹
+    │   ├── case_001.npz      # 包含5个通道的气象数据
+    │   ├── case_002.npz
+    │   └── ...
+    └── Label/                 # 标签数据文件夹
+        ├── case_001.npy      # 对应的二分类标签
+        ├── case_002.npy
+        └── ...
 ```
 
-数据列表文件中每行包含一对制表符分隔的路径：输入文件路径和对应的标签文件路径。
+#### 1.2 数据格式说明
+- **输入数据**：`.npz`格式，每个文件包含5个通道
+  - Z1: 雷达反射率因子
+  - V1: 径向速度
+  - W1: 谱宽
+  - SNR1: 信噪比
+  - LDR: 线性退偏比
 
-## 模型训练
+  示例：
+  ```python
+  {
+    'Z1': array([...], shape=(480, 360)),    # 雷达反射率数据
+    'V1': array([...], shape=(480, 360)),    # 径向速度数据
+    'W1': array([...], shape=(480, 360)),    # 谱宽数据
+    'SNR1': array([...], shape=(480, 360)),  # 信噪比数据
+    'LDR': array([...], shape=(480, 360))    # 线性退偏比数据
+  }
+  ```
 
-### 运行方式
+- **标签数据**：`.npy`格式，二分类标签
+  - 0: 背景
+  - 1: 目标区域
+  ```python
+  array([[0, 0, 1, ...],
+         [0, 1, 1, ...],
+         ...], shape=(480, 360), dtype=np.uint8)
+  ```
+
+#### 1.3 数据集划分
+使用`data_utils`目录下的数据集划分工具将数据集划分为训练集、验证集和测试集：
+
+```bash
+python data_utils/split_dataset.py --data-dir ./data/THI --train-ratio 0.7 --val-ratio 0.15
+```
+
+该命令将在`data/THI/`目录下生成三个文件：
+- `train.txt`: 训练集文件列表
+- `val.txt`: 验证集文件列表
+- `test.txt`: 测试集文件列表
+
+文件内容格式示例：
+```
+Input/case_001.npz    Label/case_001.npy
+Input/case_002.npz    Label/case_002.npy
+...
+```
+
+### 2. 运行方式
 
 项目支持两种运行方式：
 
-#### 1. 命令行参数方式
-
-使用命令行参数可以灵活地配置训练参数，适合尝试不同的配置。
+#### 2.1 命令行参数方式（推荐）
+直接通过命令行参数配置运行参数，适合快速实验不同配置：
 
 ```bash
-python train.py --arch DeepLabV3Plus --encoder mobilenet_v2 --batch-size 4 --epochs 10 --lr 1e-4
+# 训练示例
+python train.py --arch DeepLabV3Plus --encoder mobilenet_v2 --batch-size 4 --epochs 50
+
+# 验证示例
+python val.py --checkpoint_path "./Train_Result/best_model.ckpt" --val_data "./data/THI/val.txt"
+
+# 预测示例
+python predict.py --checkpoint_path "./Train_Result/best_model.ckpt" --input_path "./data/THI/Input/test.npz"
 ```
 
-#### 2. 直接修改代码默认参数
+#### 2.2 修改默认参数方式
+通过直接修改代码中的默认参数运行，适合固定配置的实验：
 
-除了使用命令行参数外，您也可以直接修改`train.py`中的默认参数值，然后直接运行代码。这种方式更简单直接，适合固定配置的实验。
-
-打开`train.py`文件，找到`parse_args`函数，修改其中的默认参数：
-
+1. **训练参数配置**
+修改 `train.py` 中的默认参数：
 ```python
 def parse_args():
     parser = argparse.ArgumentParser(description='气象目标分割训练脚本')
     
     # 修改这里的默认值
     parser.add_argument('--arch', type=str, default='DeepLabV3Plus',
-                        choices=['Unet', 'UnetPlusPlus', 'DeepLabV3', 'DeepLabV3Plus', ...],
-                        help='分割模型架构')
-    parser.add_argument('--encoder', type=str, default='mobilenet_v2', ...)
-    parser.add_argument('--batch-size', type=int, default=4, ...)
+                       choices=['Unet', 'UnetPlusPlus', 'DeepLabV3', 'DeepLabV3Plus', 'FPN', 
+                               'PSPNet', 'PAN', 'LinkNet', 'MAnet', 'UPerNet', 'Segformer'])
+    parser.add_argument('--encoder', type=str, default='mobilenet_v2')
+    parser.add_argument('--batch-size', type=int, default=4)
+    parser.add_argument('--epochs', type=int, default=50)
+    parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--precision', type=str, default='16-mixed')
     # ... 其他参数
+    return parser.parse_args()
 ```
 
-修改完成后，直接运行：
-
-```bash
-python train.py
-```
-
-### 主要训练参数
-
-- `--arch`：分割模型架构，可选值包括 Unet、UnetPlusPlus、DeepLabV3、DeepLabV3Plus、FPN、PSPNet、PAN、LinkNet、MAnet、UPerNet、Segformer
-- `--encoder`：主干网络，支持多种选择如 resnet18、mobilenet_v2、efficientnet-b0 等
-- `--batch-size`：批次大小
-- `--epochs`：训练轮数
-- `--lr`：学习率
-- `--workers`：数据加载线程数
-- `--resume-from`：继续训练的检查点路径
-- `--train-data`：训练数据集路径
-- `--val-data`：验证数据集路径
-- `--test-data`：测试数据集路径
-- `--output-dir`：训练结果保存的根目录路径
-- `--precision`：训练精度，可选值包括 32、16-mixed、bf16-mixed
-
-### 示例训练命令
-
-训练一个使用 DeepLabV3Plus 架构和 MobileNetV2 主干网络的模型：
-
-```bash
-python train.py --arch DeepLabV3Plus --encoder mobilenet_v2 --batch-size 4 --epochs 20 --lr 1e-4 --workers 4 --precision 16-mixed
-```
-
-继续从现有检查点训练：
-
-```bash
-python train.py --arch DeepLabV3Plus --encoder mobilenet_v2 --batch-size 4 --epochs 10 --lr 5e-5 --resume-from "./Train_Result/DeepLabV3Plus_mobilenet_v2_lr0.0001_ep20_bs4_p16mixed/checkpoints/best_model.ckpt"
-```
-
-## 模型评估
-
-### 运行方式
-
-评估模型同样支持两种方式：
-
-#### 1. 命令行参数方式
-
-```bash
-python val.py --checkpoint_path PATH_TO_CHECKPOINT --val_data PATH_TO_TEST_DATA
-```
-
-#### 2. 直接修改代码默认参数
-
-您可以直接修改`val.py`中的默认参数，然后直接运行：
-
+2. **验证参数配置**
+修改 `val.py` 中的默认参数：
 ```python
 def parse_args():
     parser = argparse.ArgumentParser(description='气象目标分割验证脚本')
     parser.add_argument('--checkpoint_path', type=str,
-                        default="./Train_Result/DeepLabV3Plus_mobilenet_v2_lr0.0001_ep1_bs4_p16mixed/best_model.ckpt",
-                        help='模型检查点路径')
-    # ... 修改其他默认参数
+                       default='./Train_Result/best_model.ckpt')
+    parser.add_argument('--val_data', type=str,
+                       default='./data/THI/val.txt')
+    # ... 其他参数
+    return parser.parse_args()
 ```
 
-修改后直接运行：
-
-```bash
-python val.py
-```
-
-### 主要评估参数
-
-- `--checkpoint_path`：模型检查点路径
-- `--val_data`：验证集文件列表路径
-- `--output_dir`：评估结果保存的根目录路径
-- `--device`：使用的设备 (cuda/cpu)
-- `--batch_size`：批次大小
-- `--workers`：数据加载器的工作线程数
-- `--visualize_samples`：可视化样本数量
-
-### 示例评估命令
-
-评估一个训练好的模型：
-
-```bash
-python val.py --checkpoint_path "./Train_Result/DeepLabV3Plus_mobilenet_v2_lr0.0001_ep20_bs4_p16mixed/best_model.ckpt" --val_data "./data/THI/test.txt" --output_dir "./Evaluation_Result" --visualize_samples 10
-```
-
-## 模型预测
-
-### 运行方式
-
-同样支持两种运行方式：
-
-#### 1. 命令行参数方式
-
-```bash
-python predict.py --checkpoint_path PATH_TO_CHECKPOINT --input_path PATH_TO_INPUT_DATA
-```
-
-#### 2. 直接修改代码默认参数
-
-编辑`predict.py`文件中的默认参数：
-
+3. **预测参数配置**
+修改 `predict.py` 中的默认参数：
 ```python
 def parse_args():
     parser = argparse.ArgumentParser(description='气象目标分割预测脚本')
     parser.add_argument('--checkpoint_path', type=str,
-                        default="./Train_Result/DeepLabV3Plus_mobilenet_v2_lr0.0001_ep1_bs4_p16mixed/best_model.ckpt",
-                        help='模型检查点路径')
+                       default='./Train_Result/best_model.ckpt')
     parser.add_argument('--input_path', type=str,
-                        default="./data/THI/Input/Z1_20230805.npz",
-                        help='输入数据路径(单个npz文件或目录)')
-    # ... 修改其他默认参数
+                       default='./data/THI/Input/test.npz')
+    # ... 其他参数
+    return parser.parse_args()
 ```
 
-然后直接运行：
-
+修改完默认参数后，直接运行相应脚本即可：
 ```bash
+# 训练
+python train.py
+
+# 验证
+python val.py
+
+# 预测
 python predict.py
 ```
 
-### 主要预测参数
+## 📝 详细指南
 
-- `--checkpoint_path`：模型检查点路径
-- `--input_path`：输入数据路径(单个npz文件或目录)
-- `--output_dir`：预测结果保存的根目录路径
-- `--device`：使用的设备 (cuda/cpu)
+### 训练参数说明
 
-### 示例预测命令
+| 参数名 | 说明 | 默认值 | 可选值 |
+|--------|------|--------|--------|
+| arch | 模型架构 | DeepLabV3Plus | Unet, UnetPlusPlus... |
+| encoder | 编码器 | mobilenet_v2 | resnet50, efficientnet-b0... |
+| batch-size | 批次大小 | 4 | 根据显存设置 |
+| epochs | 训练轮数 | 50 | 自定义 |
+| lr | 学习率 | 1e-4 | 建议范围：1e-5~1e-3 |
+| precision | 训练精度 | 16-mixed | 32, 16-mixed, bf16-mixed |
 
-对单个文件进行预测：
+### 高级训练技巧
 
+1. **学习率调整**
 ```bash
-python predict.py --checkpoint_path "./Train_Result/DeepLabV3Plus_mobilenet_v2_lr0.0001_ep20_bs4_p16mixed/best_model.ckpt" --input_path "./data/THI/Input/Z1_20230805.npz" --output_dir "./Predict_Result"
+python train.py --lr 1e-4 --lr-scheduler cosine --warmup-epochs 5
 ```
 
-对目录中的所有文件进行预测：
-
+2. **使用预训练模型**
 ```bash
-python predict.py --checkpoint_path "./Train_Result/DeepLabV3Plus_mobilenet_v2_lr0.0001_ep20_bs4_p16mixed/best_model.ckpt" --input_path "./data/THI/Input" --output_dir "./Predict_Result"
+python train.py --pretrained --weights "./pretrained/model.pth"
 ```
 
-## 输出结果说明
+3. **多GPU训练**
+```bash
+python train.py --gpus 2 --strategy ddp
+```
 
-### 训练结果
+### 数据增强配置
 
-训练结果保存在 `Train_Result` 目录下，包括：
+在 `data_utils/augmentation.py` 中可以自定义数据增强策略：
+- 随机旋转
+- 随机翻转
+- 随机裁剪
+- 高斯噪声
+- 亮度对比度调整
 
-- `checkpoints/`：保存模型检查点文件
-- `best_model.ckpt`：最佳模型文件
-- TensorBoard 日志文件：记录训练过程中的各项指标
+## 💡 性能优化
 
-### 评估结果
+1. **内存优化**
+- 使用混合精度训练
+- 适当的batch size
+- 梯度累积
 
-评估结果保存在 `Evaluation_Result` 目录下，包括：
+2. **训练速度优化**
+- 数据预加载
+- 多进程数据加载
+- GPU预热
 
-- `metrics.json`：包含各项评估指标（IoU、Dice系数、准确率等）
-- `visualizations/`：包含原始图像、真实掩码和预测结果的可视化图像
+3. **模型优化**
+- 模型剪枝
+- 知识蒸馏
+- 量化
 
-### 预测结果
+## ❓ 常见问题
 
-预测结果保存在 `Predict_Result` 目录下，包括：
+1. **显存不足**
+   - 减小batch size
+   - 使用混合精度训练
+   - 选择更轻量级的模型
 
-- `images/`：包含可视化结果图像，显示多个通道数据和预测掩码
-- `arrays/`：包含预测掩码的 NumPy 数组文件 (.npy)
+2. **训练不收敛**
+   - 检查学习率设置
+   - 验证数据预处理
+   - 尝试不同的优化器
 
-## 性能指标
+3. **预测结果不理想**
+   - 增加训练轮数
+   - 调整数据增强策略
+   - 尝试不同的模型架构
 
-模型评估包括以下主要指标：
+## 📝 引用
 
-- **IoU (Intersection over Union)**：交并比，衡量预测掩码与真实掩码的重叠程度
-- **Dice 系数**：等同于 F1 分数，评估分割质量
-- **准确率 (Accuracy)**：分类正确的像素比例
-- **精确率 (Precision)**：预测为目标的像素中实际为目标的比例
-- **召回率 (Recall)**：实际为目标的像素中被正确预测为目标的比例
+如果您在研究中使用了本项目，请引用：
 
-## 常见问题
-
-1. **CUDA 内存不足**：
-   - 减小批次大小 (--batch-size)
-   - 使用混合精度训练 (--precision 16-mixed)
-   - 选择较小的主干网络 (如 mobilenet_v2 代替 resnet101)
-
-2. **训练不稳定**：
-   - 减小学习率 (--lr)
-   - 检查数据预处理和归一化操作
-   - 查看是否有异常值或缺失值
-
-3. **预测结果不理想**：
-   - 增加训练轮数 (--epochs)
-   - 尝试不同的模型架构和主干网络
-   - 增加数据增强的多样性
-   - 检查标签质量
-
-## 高级用法
-
-### 自定义数据集
-
-如果您有自己的数据集，需要：
-
-1. 将数据转换为适当的格式（npz 和 npy）
-2. 创建数据列表文件（train.txt、val.txt、test.txt）
-3. 根据需要修改 `data_utils/dataset.py` 中的数据加载逻辑
-
-### 模型导出
-
-训练好的模型可以导出为 ONNX 或 TorchScript 格式，方便在生产环境中部署。示例代码请参考 PyTorch 官方文档。
-
-## 项目扩展
-
-1. **增加新的模型架构**：可通过在 `models/model.py` 中扩展模型定义
-2. **支持新的数据格式**：修改 `data_utils/dataset.py` 中的数据加载逻辑
-3. **增加新的评估指标**：在 `val.py` 中添加新的评估函数
-
-## 注意事项
-
-- 请确保您有足够的 GPU 内存进行训练
-- 对于大型数据集，推荐使用混合精度训练
-- 在生产环境中部署前，请充分验证模型的性能和稳定性
-
-## 参考资料
-
-- [Segmentation Models PyTorch](https://github.com/qubvel/segmentation_models.pytorch)
-- [PyTorch Lightning](https://pytorch-lightning.readthedocs.io/)
-- [Albumentations](https://albumentations.ai/)
-
-## 联系方式
-
-如有任何问题或建议，请联系项目维护者。
-
----
-
-希望本文档能够帮助您了解和使用本气象目标分割项目。祝您使用愉快！ 
+```bibtex
+@software{meteo-seg,
+  title = {Meteorological Target Segmentation},
+  year = {2024},
+  author = {Ronin_yz},
+  url = {https://github.com/yourusername/Meteorological-target-segmentation}
+}
+``` 
