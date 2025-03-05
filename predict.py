@@ -10,6 +10,8 @@ import matplotlib.colors as mcolors
 from matplotlib.colors import LinearSegmentedColormap
 from pathlib import Path
 import matplotlib
+from tqdm import tqdm
+from tqdm.notebook import tqdm as tqdm_notebook
 
 # 设置中文字体支持
 matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'SimSun', 'Arial Unicode MS']  # 优先使用黑体
@@ -22,7 +24,7 @@ def parse_args():
                         default="./Train_Result/DeepLabV3Plus_mobilenet_v2_lr0.0001_ep10_bs4_p16mixed/best_model.ckpt",
                         help='模型检查点路径')
     parser.add_argument('--input_path', type=str,
-                        default="./data/THI/Input/Z1_20230805.npz",
+                        default="./data/THI_extension",
                         help='输入数据路径(单个npz文件或目录)')
     parser.add_argument('--output_dir', type=str, default='Predict_Result',
                         help='预测结果保存的根目录路径')
@@ -31,10 +33,10 @@ def parse_args():
     return parser.parse_args()
 
 def create_custom_colormap():
-    """创建自定义的气象目标分割颜色映射"""
-    # 背景为黑色，目标为红色
-    colors = [(0, 0, 0), (1, 0, 0)]  # 黑色背景，红色目标
-    return LinearSegmentedColormap.from_list('custom_cmap', colors, N=2)
+    """创建离散的颜色映射"""
+    from matplotlib.colors import ListedColormap
+    # 红色(0)，绿色(1)，白色(无效值)
+    return ListedColormap([(1, 0, 0), (0, 0.8, 0), (1, 1, 1)])
 
 def load_data(file_path):
     """加载气象数据文件"""
@@ -188,58 +190,76 @@ def visualize_prediction(image, prediction, save_path=None):
         else:
             plt.show()
 
-def predict_single_file(model, file_path, output_dir, device):
+def predict_single_file(model, file_path, output_dir, device, pbar=None):
     """对单个气象数据文件进行预测并可视化"""
-    # 确保输出目录存在
-    images_dir = os.path.join(output_dir, "images")
-    arrays_dir = os.path.join(output_dir, "arrays")
-    os.makedirs(images_dir, exist_ok=True)
-    os.makedirs(arrays_dir, exist_ok=True)
-    
-    # 获取文件名（不包含路径和扩展名）
-    file_name = Path(file_path).stem
-    
-    # 加载数据
-    image = load_data(file_path)
-    if image is None:
+    try:
+        if pbar:
+            pbar.set_description(f"处理文件: {Path(file_path).name}")
+        
+        # 创建处理步骤的进度条
+        steps = ['准备目录', '加载数据', '数据预处理', '模型预测', '后处理', '保存结果']
+        with tqdm(total=len(steps), desc="处理步骤", leave=False) as step_pbar:
+            # 确保输出目录存在
+            images_dir = os.path.join(output_dir, "images")
+            arrays_dir = os.path.join(output_dir, "arrays")
+            os.makedirs(images_dir, exist_ok=True)
+            os.makedirs(arrays_dir, exist_ok=True)
+            step_pbar.update(1)
+            
+            # 获取文件名（不包含路径和扩展名）
+            file_name = Path(file_path).stem
+            
+            # 加载数据
+            image = load_data(file_path)
+            if image is None:
+                return None
+            step_pbar.update(1)
+            
+            # 数据预处理
+            invalid_mask = np.any(np.isnan(image), axis=0)
+            image = np.nan_to_num(image, nan=0.0)
+            
+            # 对每个通道进行归一化
+            for c in range(image.shape[0]):
+                channel_data = image[c:c+1, :, :]
+                channel_min = np.min(channel_data)
+                channel_max = np.max(channel_data)
+                channel_range = channel_max - channel_min
+                if channel_range == 0:
+                    channel_range = 1
+                image[c:c+1, :, :] = (channel_data - channel_min) / channel_range
+            
+            padded_image, original_size = pad_to_divisible_by_32(image)
+            step_pbar.update(1)
+            
+            # 模型预测
+            x = torch.from_numpy(padded_image).unsqueeze(0).to(device)
+            with torch.no_grad():
+                outputs = model(x)
+                padded_prediction = outputs.argmax(dim=1).squeeze().cpu().numpy()
+            step_pbar.update(1)
+            
+            # 后处理
+            prediction = crop_prediction(padded_prediction, original_size)
+            prediction[invalid_mask] = 2
+            step_pbar.update(1)
+            
+            # 保存结果
+            output_path = os.path.join(images_dir, f"{file_name}_prediction.png")
+            np_output_path = os.path.join(arrays_dir, f"{file_name}_prediction.npy")
+            np.save(np_output_path, prediction)
+            visualize_prediction(image, prediction, output_path)
+            step_pbar.update(1)
+            
+            if pbar:
+                pbar.update(1)
+            
+            return prediction
+    except Exception as e:
+        print(f"\n处理文件 {file_path} 时出错: {str(e)}")
+        if pbar:
+            pbar.update(1)
         return None
-    
-    # 保存原始图像尺寸，用于后续裁剪
-    original_shape = image.shape[1:]  # (h, w)
-    
-    # 应用padding，保持与训练时一致，同时获取原始尺寸
-    padded_image, original_size = pad_to_divisible_by_32(image)
-    
-    # 准备输入数据
-    x = torch.from_numpy(padded_image).unsqueeze(0).to(device)  # 添加批次维度
-    
-    # 进行预测
-    with torch.no_grad():
-        outputs = model(x)
-        padded_prediction = outputs.argmax(dim=1).squeeze().cpu().numpy()
-    
-    # 将预测结果裁剪回原始尺寸
-    prediction = crop_prediction(padded_prediction, original_size)
-    
-    # 保存预测结果图像
-    output_path = os.path.join(images_dir, f"{file_name}_prediction.png")
-    
-    # 保存裁剪后的预测结果为numpy数组
-    np_output_path = os.path.join(arrays_dir, f"{file_name}_prediction.npy")
-    np.save(np_output_path, prediction)
-    
-    # 可视化并保存结果 - 使用原始图像和裁剪后的预测结果
-    visualize_prediction(image, prediction, output_path)
-    
-    print(f"预测结果图像已保存到 {output_path}")
-    print(f"预测结果numpy数组已保存到 {np_output_path}")
-    
-    # 打印尺寸信息，以便确认裁剪是否正确
-    print(f"原始图像尺寸: {original_size}")
-    print(f"填充后图像尺寸: {padded_image.shape[1:]}")
-    print(f"裁剪后预测结果尺寸: {prediction.shape}")
-    
-    return prediction
 
 def main():
     # 解析命令行参数
@@ -252,28 +272,24 @@ def main():
         return
     
     try:
-        # 加载模型
-        print(f"正在加载模型从: {args.checkpoint_path}")
-        model = ThiModel.load_from_checkpoint(args.checkpoint_path)
-        model = model.to(args.device)
-        model.eval()
+        # 加载模型（显示进度条）
+        with tqdm(total=1, desc="加载模型") as pbar:
+            print(f"正在加载模型从: {args.checkpoint_path}")
+            model = ThiModel.load_from_checkpoint(args.checkpoint_path)
+            model = model.to(args.device)
+            model.eval()
+            pbar.update(1)
         
-        # 创建更有组织的输出目录结构
-        # 提取模型名称信息
+        # 创建输出目录结构
         model_name = os.path.basename(args.checkpoint_path).split('.')[0]
         
-        # 添加时间戳
         import datetime
         timestamp = datetime.datetime.now().strftime("%m%d_%H%M")
-        
-        # 提取架构信息（如果在模型中保存）
         arch_info = f"{model.hparams.arch}_{model.hparams.encoder_name}" if hasattr(model, 'hparams') else model_name
         
-        # 创建具有描述性的结果目录
         result_dir = os.path.join(args.output_dir, f"{arch_info}_predict_{timestamp}")
         os.makedirs(result_dir, exist_ok=True)
         
-        # 创建图像和numpy数组的子目录
         images_dir = os.path.join(result_dir, "images")
         arrays_dir = os.path.join(result_dir, "arrays")
         os.makedirs(images_dir, exist_ok=True)
@@ -281,30 +297,30 @@ def main():
         
         # 检查输入路径是文件还是目录
         if os.path.isfile(args.input_path):
-            # 单个文件
             if args.input_path.endswith('.npz'):
-                # 更新predict_single_file函数调用以使用新的目录结构
-                predict_single_file(model, args.input_path, result_dir, args.device)
+                with tqdm(total=1, desc="处理文件") as pbar:
+                    predict_single_file(model, args.input_path, result_dir, args.device, pbar)
             else:
                 print(f"错误: 输入文件不是npz格式: {args.input_path}")
         elif os.path.isdir(args.input_path):
-            # 目录中的所有npz文件
-            count = 0
-            for filename in os.listdir(args.input_path):
-                if filename.endswith('.npz'):
-                    count += 1
-                    file_path = os.path.join(args.input_path, filename)
-                    predict_single_file(model, file_path, result_dir, args.device)
-            
-            if count == 0:
+            # 首先计算需要处理的文件数量
+            npz_files = [f for f in os.listdir(args.input_path) if f.endswith('.npz')]
+            if not npz_files:
                 print(f"警告: 在目录 {args.input_path} 中没有找到npz文件")
-            else:
-                print(f"已完成对 {count} 个文件的预测，结果保存在 {result_dir}")
+                return
+                
+            # 使用tqdm显示总体进度
+            with tqdm(total=len(npz_files), desc="总体进度") as pbar:
+                for filename in npz_files:
+                    file_path = os.path.join(args.input_path, filename)
+                    predict_single_file(model, file_path, result_dir, args.device, pbar)
+                
+            print(f"\n已完成对 {len(npz_files)} 个文件的预测，结果保存在 {result_dir}")
         else:
             print(f"错误: 输入路径不存在: {args.input_path}")
             
     except Exception as e:
-        print(f"预测过程中发生错误: {str(e)}")
+        print(f"\n预测过程中发生错误: {str(e)}")
         import traceback
         traceback.print_exc()
 
