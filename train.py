@@ -67,7 +67,7 @@ def parse_args():
                             'dpn68', 'dpn68b', 'dpn92', 'dpn98', 'dpn107', 'dpn131',
                             
                             # Inception 系列
-                            'inceptionv4', 'inceptionresnetv2',
+                            'inceptionv4',
                             
                             # Xception 系列
                             'xception',
@@ -99,16 +99,12 @@ def parse_args():
     parser.add_argument('--resume-from', type=str, default=None, 
                         help='继续训练的检查点路径')
     
-    # 添加数据集路径参数
-    parser.add_argument('--train-data', type=str, default="./data/THI/train.txt", 
-                        help='训练数据集路径')
-    parser.add_argument('--val-data', type=str, default="./data/THI/val.txt", 
-                        help='验证数据集路径')
-    parser.add_argument('--test-data', type=str, default="./data/THI/test.txt", 
-                        help='测试数据集路径')
+    # 修改数据集路径参数为单一的数据集根目录
+    parser.add_argument('--data-dir', type=str, default="./data/THI", 
+                        help='数据集根目录路径,目录下应包含train.txt、val.txt和test.txt')
     
     # 添加结果保存路径参数
-    parser.add_argument('--output-dir', type=str, default="Train_Result", 
+    parser.add_argument('--output-dir', type=str, default="Result/Train", 
                         help='训练结果保存的根目录路径')
     
     # 添加训练精度参数
@@ -116,7 +112,40 @@ def parse_args():
                         choices=['32', '16-mixed', 'bf16-mixed'],
                         help='训练精度: 32为全精度, 16-mixed为16位混合精度, bf16-mixed为bfloat16混合精度')
     
+    # 添加隶属度计算相关参数
+    parser.add_argument('--calculate-membership', type=str, default='meteorological',
+                        choices=['none', 'clearsky', 'meteorological'],
+                        help='隶属度计算方式: none为使用原始数据, clearsky为使用晴空隶属度, meteorological为使用气象目标隶属度')
+    
+    parser.add_argument('--polynomial-dir', type=str, 
+                        default="./data_utils/export_membership/多项式拟合参数",
+                        help='多项式拟合参数目录路径')
+    
+    parser.add_argument('--height-bands', type=str, default='0,100,50,150,125,180,100,200',
+                        help='高度带列表，格式为逗号分隔的数字，每两个数字表示一个高度带的起止高度')
+    
     return parser.parse_args()
+
+def get_dataset_paths(data_dir):
+    """
+    从数据集根目录获取训练、验证和测试数据集的路径
+    
+    Args:
+        data_dir (str): 数据集根目录路径
+        
+    Returns:
+        tuple: 包含训练、验证和测试数据集路径的元组
+    """
+    train_txt = os.path.join(data_dir, "train.txt")
+    val_txt = os.path.join(data_dir, "val.txt")
+    test_txt = os.path.join(data_dir, "test.txt")
+    
+    # 检查文件是否存在
+    for file_path, name in [(train_txt, "训练"), (val_txt, "验证"), (test_txt, "测试")]:
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"错误：在{data_dir}目录下未找到{name}数据集文件 ({os.path.basename(file_path)})")
+    
+    return train_txt, val_txt, test_txt
 
 def save_metrics(metrics, filepath, format='json'):
     """
@@ -153,25 +182,51 @@ def main():
     # 忽略警告
     warnings.filterwarnings('ignore', category=UserWarning)
     
-    # 使用命令行参数中的数据集路径
-    TRAIN_TXT = args.train_data
-    VAL_TXT = args.val_data
-    TEST_TXT = args.test_data
+    # 获取数据集文件路径
+    try:
+        TRAIN_TXT, VAL_TXT, TEST_TXT = get_dataset_paths(args.data_dir)
+        print(f"已找到数据集文件：")
+        print(f"训练集：{TRAIN_TXT}")
+        print(f"验证集：{VAL_TXT}")
+        print(f"测试集：{TEST_TXT}")
+    except FileNotFoundError as e:
+        print(str(e))
+        return
+
+    # 获取数据集名称（使用目录的最后一级作为数据集名称）
+    dataset_name = os.path.basename(os.path.normpath(args.data_dir))
+    # 获取当前时间
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
+    
+    # 解析高度带参数
+    height_bands = []
+    if args.height_bands:
+        heights = [int(h) for h in args.height_bands.split(',')]
+        height_bands = list(zip(heights[::2], heights[1::2]))
 
     # 创建数据集实例
     train_dataset = ThiDataset(
         TRAIN_TXT,
         augmentation=get_training_augmentation(),
+        calculate_membership=args.calculate_membership,
+        polynomial_dir=args.polynomial_dir if args.calculate_membership != 'none' else None,
+        height_bands=height_bands if args.calculate_membership != 'none' else None
     )
 
     valid_dataset = ThiDataset(
         VAL_TXT,
         augmentation=get_validation_augmentation(),
+        calculate_membership=args.calculate_membership,
+        polynomial_dir=args.polynomial_dir if args.calculate_membership != 'none' else None,
+        height_bands=height_bands if args.calculate_membership != 'none' else None
     )
 
     test_dataset = ThiDataset(
         TEST_TXT,
         augmentation=get_validation_augmentation(),
+        calculate_membership=args.calculate_membership,
+        polynomial_dir=args.polynomial_dir if args.calculate_membership != 'none' else None,
+        height_bands=height_bands if args.calculate_membership != 'none' else None
     )
 
     # 创建数据加载器
@@ -227,11 +282,12 @@ def main():
         checkpoint_dir = os.path.dirname(os.path.dirname(args.resume_from))
         original_dir = os.path.basename(checkpoint_dir)
         
-        # 创建新的结果保存路径，添加continued_前缀和时间戳，并包含精度信息
-        timestamp = datetime.datetime.now().strftime("%m%d_%H%M")
-        # 格式化精度信息，移除短横线并小写展示
+        # 创建新的结果保存路径，添加continued_前缀和时间戳
         precision_str = args.precision.replace('-', '')
-        result_dir = os.path.join(args.output_dir, f"continued_{original_dir}_lr{args.lr}_ep{args.epochs}_p{precision_str}_continued{timestamp}")
+        result_dir = os.path.join(
+            args.output_dir, 
+            f"continued_{dataset_name}_{original_dir}_lr{args.lr}_ep{args.epochs}_p{precision_str}_{timestamp}"
+        )
     else:
         # 创建新模型实例
         model = ThiModel(
@@ -241,15 +297,31 @@ def main():
             out_classes=2,
             encoder_weights="imagenet",
             learning_rate=args.lr,
-            batch_size=args.batch_size
+            batch_size=args.batch_size,
+            dataset_name=dataset_name,  # 添加数据集名称到模型参数
+            calculate_membership=args.calculate_membership,
+            polynomial_dir=args.polynomial_dir if args.calculate_membership != 'none' else None,
+            height_bands=height_bands if args.calculate_membership != 'none' else None
         )
         # 保存超参数到模型
         model.save_hyperparameters()
         
-        # 创建新模型实例时的目录命名逻辑，使用用户指定的输出目录，并包含精度信息
-        # 格式化精度信息，移除短横线并小写展示
+        # 创建新的结果保存路径，包含数据集信息和时间戳
         precision_str = args.precision.replace('-', '')
-        result_dir = os.path.join(args.output_dir, f"{args.arch}_{args.encoder}_lr{args.lr}_ep{args.epochs}_bs{args.batch_size}_p{precision_str}")
+        
+        # 添加隶属度信息到目录名
+        membership_str = ''
+        if args.calculate_membership == 'none':
+            membership_str = 'raw'
+        elif args.calculate_membership == 'clearsky':
+            membership_str = 'cs'
+        else:  # meteorological
+            membership_str = 'met'
+            
+        result_dir = os.path.join(
+            args.output_dir, 
+            f"{membership_str}_{dataset_name}_{args.arch}_{args.encoder}_lr{args.lr}_ep{args.epochs}_bs{args.batch_size}_p{precision_str}_{timestamp}"
+        )
     
     # 确保结果目录存在
     os.makedirs(result_dir, exist_ok=True)
@@ -268,19 +340,20 @@ def main():
     # 使用单个ModelCheckpoint回调，配置它同时保存最佳模型和其他检查点
     checkpoint_callback = ModelCheckpoint(
         dirpath=os.path.join(result_dir, "checkpoints"),
-        filename='{epoch:02d}-{valid_dataset_iou:.3f}',
+        filename=f'{dataset_name}_' + '{epoch:02d}-{valid_dataset_iou:.3f}',
         save_top_k=3,
         monitor='valid_dataset_iou',
         mode='max',
         save_last=True,  # 保存最后一个模型
-        auto_insert_metric_name=True  # 自动在文件名中插入指标名称
+        auto_insert_metric_name=True,  # 自动在文件名中插入指标名称
     )
 
     # 创建TensorBoard日志记录器，保存到特定参数命名的子文件夹
     logger = TensorBoardLogger(
         save_dir=result_dir,
         name="logs",
-        default_hp_metric=False
+        default_hp_metric=False,
+        version=f"{dataset_name}"  # 添加数据集名称作为版本标识
     )
 
     # 创建训练器
@@ -319,15 +392,15 @@ def main():
     valid_metrics_dict = valid_metrics[0] if valid_metrics and isinstance(valid_metrics, list) else valid_metrics
     
     # 创建指标保存目录
-    metrics_dir = os.path.join(result_dir, "metrics")
+    metrics_dir = os.path.join(result_dir, f"{dataset_name}_metrics")
     os.makedirs(metrics_dir, exist_ok=True)
     
     # 保存验证指标到文件
-    valid_metrics_path = os.path.join(metrics_dir, "validation_metrics.json")
+    valid_metrics_path = os.path.join(metrics_dir, f"{dataset_name}_validation_metrics.json")
     save_metrics(valid_metrics_dict, valid_metrics_path, format='json')
     
     # 同时保存为CSV格式方便Excel查看
-    valid_metrics_csv_path = os.path.join(metrics_dir, "validation_metrics.csv")
+    valid_metrics_csv_path = os.path.join(metrics_dir, f"{dataset_name}_validation_metrics.csv")
     save_metrics(valid_metrics_dict, valid_metrics_csv_path, format='csv')
 
     # 测试模型
@@ -339,15 +412,16 @@ def main():
     test_metrics_dict = test_metrics[0] if test_metrics and isinstance(test_metrics, list) else test_metrics
     
     # 保存测试指标到文件
-    test_metrics_path = os.path.join(metrics_dir, "test_metrics.json")
+    test_metrics_path = os.path.join(metrics_dir, f"{dataset_name}_test_metrics.json")
     save_metrics(test_metrics_dict, test_metrics_path, format='json')
     
     # 同时保存为CSV格式方便Excel查看
-    test_metrics_csv_path = os.path.join(metrics_dir, "test_metrics.csv")
+    test_metrics_csv_path = os.path.join(metrics_dir, f"{dataset_name}_test_metrics.csv")
     save_metrics(test_metrics_dict, test_metrics_csv_path, format='csv')
     
     # 合并所有指标并保存一个综合报告
     all_metrics = {
+        "dataset": dataset_name,
         "validation": valid_metrics_dict,
         "test": test_metrics_dict,
         "model_info": {
@@ -357,12 +431,13 @@ def main():
             "batch_size": args.batch_size,
             "precision": args.precision,
             "epochs": args.epochs,
+            "calculate_membership": args.calculate_membership,
             "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
     }
     
     # 保存综合指标报告
-    all_metrics_path = os.path.join(metrics_dir, "all_metrics.json")
+    all_metrics_path = os.path.join(metrics_dir, f"{dataset_name}_all_metrics.json")
     with open(all_metrics_path, 'w', encoding='utf-8') as f:
         json.dump(all_metrics, f, indent=4, ensure_ascii=False)
     
@@ -372,7 +447,7 @@ def main():
     images, masks = next(iter(test_loader))
 
     # 创建图像保存目录
-    imgs_dir = os.path.join(result_dir, "test_images")
+    imgs_dir = os.path.join(result_dir, f"{dataset_name}_test_images")
     os.makedirs(imgs_dir, exist_ok=True)
 
     # Switch the model to evaluation mode
@@ -381,10 +456,9 @@ def main():
         logits = model(images)  # Get raw logits from the model
 
     # Apply softmax to get class probabilities
-    # Shape: [batch_size, num_classes, H, W]
     pr_masks = logits.softmax(dim=1)
     # Convert class probabilities to predicted class labels
-    pr_masks = pr_masks.argmax(dim=1)  # Shape: [batch_size, H, W]
+    pr_masks = pr_masks.argmax(dim=1)
 
     # 保存图像样本（图像、真实掩码和预测掩码）
     for idx, (image, gt_mask, pr_mask) in enumerate(zip(images, masks, pr_masks)):
@@ -395,41 +469,38 @@ def main():
             plt.subplot(1, 3, 1)
             # 旋转图像90度
             img_data = np.rot90(image[0].cpu().numpy())
-            plt.imshow(img_data, cmap='viridis')  # 只显示第一个通道
-            plt.title("Channel 1 (Z1)")
+            plt.imshow(img_data, cmap='viridis')
+            plt.title(f"{dataset_name} - Channel 1 (Z1)")
             plt.axis("off")
 
-            # Ground Truth Mask（背景为白色，目标为红色）
+            # Ground Truth Mask
             plt.subplot(1, 3, 2)
-            # 旋转真实掩码90度
             gt_data = np.rot90(gt_mask.cpu().numpy())
-            plt.imshow(gt_data, cmap=binary_cmap, vmin=0, vmax=1)  # 使用自定义色图
-            plt.title("Ground truth")
+            plt.imshow(gt_data, cmap=binary_cmap, vmin=0, vmax=1)
+            plt.title(f"{dataset_name} - Ground truth")
             plt.axis("off")
 
-            # Predicted Mask（背景为白色，目标为红色）
+            # Predicted Mask
             plt.subplot(1, 3, 3)
-            # 旋转预测掩码90度
             pr_data = np.rot90(pr_mask.cpu().numpy())
-            plt.imshow(pr_data, cmap=binary_cmap, vmin=0, vmax=1)  # 使用自定义色图
-            plt.title("Prediction")
+            plt.imshow(pr_data, cmap=binary_cmap, vmin=0, vmax=1)
+            plt.title(f"{dataset_name} - Prediction")
             plt.axis("off")
 
             # 保存图像
-            plt.savefig(os.path.join(imgs_dir, f"sample_{idx}.png"), dpi=300)
-            plt.close()
+            plt.savefig(os.path.join(imgs_dir, f"{dataset_name}_sample_{idx}.png"), dpi=300)
+            plt.close()   
             
             # 可选：保存所有通道图像
-            visualize_all_channels(image, gt_mask, pr_mask, idx, imgs_dir)
+            visualize_all_channels(image, gt_mask, pr_mask, idx, imgs_dir, dataset_name)
         else:
             break
 
     # 训练完成后，复制最佳模型到结果目录根目录
-    # 在训练和验证之后，获取最佳模型的路径并复制一份
     best_model_path = checkpoint_callback.best_model_path
     if best_model_path:
-        # 复制最佳模型到结果目录，并命名为best_model.ckpt
-        best_model_save_path = os.path.join(result_dir, "best_model.ckpt")
+        # 复制最佳模型到结果目录，并在文件名中包含数据集信息
+        best_model_save_path = os.path.join(result_dir, f"{dataset_name}_best_model.ckpt")
         torch.save(torch.load(best_model_path), best_model_save_path)
         print(f"最佳模型已保存到: {best_model_save_path}")
 

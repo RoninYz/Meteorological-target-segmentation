@@ -91,7 +91,7 @@ def split_dataset(root_dir, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15, se
 
 def main():
     parser = argparse.ArgumentParser(description='划分数据集为训练集、验证集和测试集')
-    parser.add_argument('--root_dir', type=str, default='./data/THI', help='数据根目录(包含Input和Label子文件夹)')
+    parser.add_argument('--root_dir', type=str, default='./data/THI_fuzzy/membership_results/clearsky', help='数据根目录(包含Input和Label子文件夹)')
     parser.add_argument('--train_ratio', type=float, default=0.8, help='训练集比例 (默认: 0.8)')
     parser.add_argument('--val_ratio', type=float, default=0.1, help='验证集比例 (默认: 0.1)')
     parser.add_argument('--test_ratio', type=float, default=0.1, help='测试集比例 (默认: 0.1)')

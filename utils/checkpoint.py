@@ -49,6 +49,6 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         ckpt_path = sys.argv[1]
     else:
-        ckpt_path = "train_result/DeepLabV3Plus_mobilenet_v2_lr0.0001_ep1_bs4/best_model.ckpt"
+        ckpt_path = "Train_Result\clearsky_DeepLabV3Plus_mobilenet_v2_lr0.0001_ep1_bs4_p16mixed_20250305_1900\clearsky_best_model.ckpt"
     
     check_checkpoint(ckpt_path) 

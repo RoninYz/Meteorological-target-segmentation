@@ -1,17 +1,8 @@
 # 排除数据集
 data/
 
-# 排除训练结果
-Train_Result/
-
-# 排除评估结果
-Evaluation_Result/
-
-# 排除预测结果
-Predict_Result/
-
-# 排除可视化结果
-Visualization_Result/  
+# 排除结果
+Result/
 
 # 排除Python缓存文件
 __pycache__/

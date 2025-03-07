@@ -17,7 +17,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='THI数据集可视化工具')
     parser.add_argument('--data-txt', type=str, default='./data/THI/train.txt',
                         help='数据集txt文件路径（包含输入和标签路径）')
-    parser.add_argument('--output-dir', type=str, default='./Visualization_Result/train',
+    parser.add_argument('--output-dir', type=str, default='./Result/visualize',
                         help='可视化结果保存目录')
     parser.add_argument('--dpi', type=int, default=300,
                         help='输出图像的DPI')

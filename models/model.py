@@ -7,7 +7,9 @@ from torch.optim import lr_scheduler
 
 
 class ThiModel(pl.LightningModule):
-    def __init__(self, arch, encoder_name, in_channels, out_classes, encoder_weights="imagenet", learning_rate=1e-4, batch_size=4):
+    def __init__(self, arch, encoder_name, in_channels, out_classes, encoder_weights="imagenet", 
+                 learning_rate=1e-4, batch_size=4, dataset_name=None,
+                 calculate_membership='none', polynomial_dir=None, height_bands=None):
         super().__init__()
         # 保存所有参数 - 这些会被 save_hyperparameters() 方法捕获
         self.arch = arch
@@ -17,6 +19,12 @@ class ThiModel(pl.LightningModule):
         self.encoder_weights = encoder_weights
         self.learning_rate = learning_rate
         self.batch_size = batch_size
+        self.dataset_name = dataset_name
+        
+        # 添加隶属度计算相关参数
+        self.calculate_membership = calculate_membership
+        self.polynomial_dir = polynomial_dir
+        self.height_bands = height_bands
         
         # 创建模型
         self.model = self._get_model()
@@ -32,10 +40,6 @@ class ThiModel(pl.LightningModule):
         self.validation_step_outputs = []
         self.test_step_outputs = []
 
-        # 计算每个通道的均值和标准差
-        self.register_buffer("mean", torch.tensor([0.0] * in_channels))
-        self.register_buffer("std", torch.tensor([1.0] * in_channels))
-
         self.save_hyperparameters()
 
     def _get_model(self):
@@ -48,26 +52,7 @@ class ThiModel(pl.LightningModule):
         )
 
     def forward(self, x):
-        # 更稳定的数据预处理
-        # 对每个通道分别归一化，避免整体统计导致的不稳定
-        batch_size, channels, height, width = x.shape
-        
-        # 确保不会有NaN输入
-        if torch.isnan(x).any() or torch.isinf(x).any():
-            # 替换NaN和Inf为0
-            x = torch.where(torch.isnan(x) | torch.isinf(x), torch.zeros_like(x), x)
-        
-        # 逐通道归一化，增加稳定性
-        for c in range(channels):
-            channel_data = x[:, c:c+1, :, :]
-            channel_min = channel_data.min(dim=2, keepdim=True)[0].min(dim=3, keepdim=True)[0]
-            channel_max = channel_data.max(dim=2, keepdim=True)[0].max(dim=3, keepdim=True)[0]
-            # 避免除以零
-            channel_range = channel_max - channel_min
-            channel_range = torch.where(channel_range == 0, torch.ones_like(channel_range), channel_range)
-            # 归一化到[0,1]范围
-            x[:, c:c+1, :, :] = (channel_data - channel_min) / channel_range
-        
+        # 数据预处理已经在数据集类中完成，这里直接使用模型
         return self.model(x)
 
     def shared_step(self, batch, stage):
@@ -115,9 +100,12 @@ class ThiModel(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         images, masks = batch
-        # 使用forward方法中的归一化，不在这里重复
-        outputs = self(images)
+        # 确保数据类型正确
+        images = images.float()
         masks = masks.long()
+        
+        # 前向传播
+        outputs = self(images)
         loss = self.loss_fn(outputs, masks)
         
         # 计算并记录指标
@@ -148,9 +136,12 @@ class ThiModel(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         images, masks = batch
-        # 使用forward方法中的归一化，不在这里重复
-        outputs = self(images)
+        # 确保数据类型正确
+        images = images.float()
         masks = masks.long()
+        
+        # 前向传播
+        outputs = self(images)
         loss = self.loss_fn(outputs, masks)
         
         probs = outputs.softmax(dim=1)
